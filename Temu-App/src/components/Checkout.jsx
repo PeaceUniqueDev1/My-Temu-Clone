@@ -1,12 +1,14 @@
-
+ 
 import { useState } from "react";
 import {
   ArrowLeft,
   MapPin,
   CreditCard,
   ShoppingBag,
-  Truck,
   ShieldCheck,
+  Lock,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 import { useLocale } from "../context/LocaleContext";
@@ -24,8 +26,16 @@ function Checkout({ cart, onBack, onPlaceOrder }) {
   });
 
   const [paymentMethod, setPaymentMethod] = useState("cash");
-
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState("idle");
   const [error, setError] = useState("");
+
+  const [cardDetails, setCardDetails] = useState({
+    cardName: "",
+    cardNumber: "",
+    expiry: "",
+    cvv: "",
+  });
 
   const subtotal = cart.reduce(
     (total, product) =>
@@ -45,21 +55,51 @@ function Checkout({ cart, onBack, onPlaceOrder }) {
     }));
   };
 
+  const handleCardChange = (event) => {
+    const { name, value } = event.target;
+
+    setCardDetails((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    const { fullName, email, phone, address, city, state } = delivery;
+    const {
+      fullName,
+      email,
+      phone,
+      address,
+      city,
+      state,
+    } = delivery;
 
-    if (!fullName || !email || !phone || !address || !city || !state) {
+    if (
+      !fullName ||
+      !email ||
+      !phone ||
+      !address ||
+      !city ||
+      !state
+    ) {
       setError("Please complete all delivery information.");
       return;
     }
 
     setError("");
 
+    if (paymentMethod === "demo-card") {
+      setShowPayment(true);
+      return;
+    }
+
+    // Cash on Delivery
     onPlaceOrder({
       delivery,
-      paymentMethod,
+      paymentMethod: "cash",
+      paymentStatus: "pending",
       items: cart,
       subtotal,
       deliveryFee,
@@ -67,6 +107,162 @@ function Checkout({ cart, onBack, onPlaceOrder }) {
     });
   };
 
+  const handleCardPayment = (event) => {
+    event.preventDefault();
+
+    const { cardName, cardNumber, expiry, cvv } = cardDetails;
+
+    if (!cardName || !cardNumber || !expiry || !cvv) {
+      setPaymentStatus("failed");
+      return;
+    }
+
+    // DEMO ONLY: This does not process a real card payment.
+    setPaymentStatus("success");
+
+    onPlaceOrder({
+      delivery,
+      paymentMethod: "demo-card",
+      paymentStatus: "paid-demo",
+      paymentReference: `UNIQ-DEMO-${Date.now()}`,
+      items: cart,
+      subtotal,
+      deliveryFee,
+      total,
+    });
+  };
+
+  // CARD PAYMENT SCREEN
+  if (showPayment) {
+    return (
+      <div className="checkout-page">
+        <button
+          className="checkout-back"
+          onClick={() => {
+            setShowPayment(false);
+            setPaymentStatus("idle");
+          }}
+        >
+          <ArrowLeft size={18} />
+          Back to checkout
+        </button>
+
+        <div className="checkout-heading">
+          <h1>Card Payment</h1>
+          <p>Enter your demo card details to continue.</p>
+        </div>
+
+        <div className="checkout-card card-payment-container">
+          <div className="card-payment-top">
+            <div className="card-payment-icon">
+              <CreditCard size={27} />
+            </div>
+
+            <div>
+              <h2>UNIQMART Secure Payment</h2>
+              <p>Complete your demo payment safely.</p>
+            </div>
+          </div>
+
+          <div className="card-amount">
+            <span>Amount to Pay</span>
+            <strong>{formatPrice(total)}</strong>
+          </div>
+
+          <form onSubmit={handleCardPayment}>
+            <label>
+              Cardholder Name
+              <input
+                type="text"
+                name="cardName"
+                value={cardDetails.cardName}
+                onChange={handleCardChange}
+                placeholder="Name on card"
+                required
+              />
+            </label>
+
+            <label>
+              Card Number
+              <input
+                type="text"
+                name="cardNumber"
+                value={cardDetails.cardNumber}
+                onChange={handleCardChange}
+                placeholder="0000 0000 0000 0000"
+                maxLength={19}
+                inputMode="numeric"
+                required
+              />
+            </label>
+
+            <div className="card-input-row">
+              <label>
+                Expiry Date
+                <input
+                  type="text"
+                  name="expiry"
+                  value={cardDetails.expiry}
+                  onChange={handleCardChange}
+                  placeholder="MM/YY"
+                  maxLength={5}
+                  required
+                />
+              </label>
+
+              <label>
+                CVV
+                <input
+                  type="password"
+                  name="cvv"
+                  value={cardDetails.cvv}
+                  onChange={handleCardChange}
+                  placeholder="123"
+                  maxLength={4}
+                  inputMode="numeric"
+                  required
+                />
+              </label>
+            </div>
+
+            {paymentStatus === "failed" && (
+              <div className="checkout-error">
+                <XCircle size={18} />
+                Please complete all card fields.
+              </div>
+            )}
+
+            {paymentStatus === "success" && (
+              <div className="checkout-success">
+                <CheckCircle size={18} />
+                Demo payment successful!
+              </div>
+            )}
+
+            <button
+              className="place-order-button"
+              type="submit"
+            >
+              <Lock size={16} />
+              Pay {formatPrice(total)}
+            </button>
+          </form>
+
+          <p className="checkout-security">
+            <ShieldCheck size={16} />
+            Demo payment only. No real money is charged.
+          </p>
+
+          <p className="demo-card-warning">
+            Use fictional card details only. Never enter a real
+            bank card number or CVV here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // MAIN CHECKOUT SCREEN
   return (
     <div className="checkout-page">
       <button className="checkout-back" onClick={onBack}>
@@ -174,6 +370,7 @@ function Checkout({ cart, onBack, onPlaceOrder }) {
                   setPaymentMethod(event.target.value)
                 }
               />
+
               <span>
                 <strong>Cash on Delivery</strong>
                 <small>Pay when your order arrives.</small>
@@ -190,9 +387,12 @@ function Checkout({ cart, onBack, onPlaceOrder }) {
                   setPaymentMethod(event.target.value)
                 }
               />
+
               <span>
-                <strong>Demo Card Payment</strong>
-                <small>Demonstration only. No real payment is taken.</small>
+                <strong>Card Payment</strong>
+                <small>
+                  Pay using our simulated card checkout.
+                </small>
               </span>
             </label>
           </section>
@@ -207,10 +407,12 @@ function Checkout({ cart, onBack, onPlaceOrder }) {
           {cart.map((product) => (
             <div className="checkout-product" key={product.id}>
               <img src={product.thumbnail} alt={product.title} />
+
               <div>
                 <strong>{product.title}</strong>
                 <small>Quantity: {product.quantity}</small>
               </div>
+
               <span>
                 {formatPrice(product.price * product.quantity)}
               </span>
@@ -232,10 +434,14 @@ function Checkout({ cart, onBack, onPlaceOrder }) {
             <strong>{formatPrice(total)}</strong>
           </div>
 
-          {error && <p className="checkout-error">{error}</p>}
+          {error && (
+            <p className="checkout-error">{error}</p>
+          )}
 
           <button className="place-order-button" type="submit">
-            Place Order
+            {paymentMethod === "demo-card"
+              ? "Continue to Payment"
+              : "Place Order"}
           </button>
 
           <p className="checkout-security">
